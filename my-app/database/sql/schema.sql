@@ -1,203 +1,174 @@
-
 CREATE DATABASE IF NOT EXISTS hospital_management_db;
 USE hospital_management_db;
 
 -- 1. Users Table
-CREATE TABLE Users (
-    user_id INT PRIMARY KEY AUTO_INCREMENT,
-    username VARCHAR(50) UNIQUE NOT NULL,
+CREATE TABLE users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    email VARCHAR(100) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
-    role ENUM('admin', 'doctor', 'nurse', 'pharmacist', 'lab_tech', 'receptionist') NOT NULL,
-    email VARCHAR(100) UNIQUE,
-    is_active BOOLEAN DEFAULT TRUE,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    deleted_at DATETIME DEFAULT NULL
+    role ENUM('doctor', 'nurse', 'receptionist', 'admin', 'ward_manager', 'ambulance_team') NOT NULL,
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
--- 2. Departments Table
-CREATE TABLE Departments (
-    department_id INT PRIMARY KEY AUTO_INCREMENT,
+-- 2. User Details
+CREATE TABLE user_details (
+    user_id INT PRIMARY KEY,
+    job_title VARCHAR(100) DEFAULT NULL,
+    department VARCHAR(100) DEFAULT NULL,
+    qualification VARCHAR(255) DEFAULT NULL,
+    phone_number VARCHAR(20) DEFAULT NULL,
+    address VARCHAR(255) DEFAULT NULL,
+    joining_date DATE DEFAULT NULL,
+    emergency_contact VARCHAR(20) DEFAULT NULL,
+    license_number VARCHAR(50) DEFAULT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- 3. Patients
+CREATE TABLE patients (
+    id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
-    description TEXT,
-    location VARCHAR(100),
-    is_active BOOLEAN DEFAULT TRUE
+    dob DATE NOT NULL,
+    gender ENUM('male', 'female', 'other') NOT NULL,
+    phone VARCHAR(20) NOT NULL,
+    address VARCHAR(255) NOT NULL,
+    is_emergency BOOLEAN NOT NULL DEFAULT FALSE, -- ✅ Emergency flag
+    reg_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
--- 3. Staff Table
-CREATE TABLE Staff (
-    staff_id INT PRIMARY KEY AUTO_INCREMENT,
-    user_id INT UNIQUE NOT NULL,
-    first_name VARCHAR(50) NOT NULL,
-    last_name VARCHAR(50) NOT NULL,
-    department_id INT,
-    phone VARCHAR(20),
-    hire_date DATE,
-    deleted_at DATETIME DEFAULT NULL,
-    FOREIGN KEY (user_id) REFERENCES Users(user_id),
-    FOREIGN KEY (department_id) REFERENCES Departments(department_id)
-);
-
--- 4. Patients Table
-CREATE TABLE Patients (
-    patient_id INT PRIMARY KEY AUTO_INCREMENT,
-    created_by_staff_id INT NOT NULL,
-    first_name VARCHAR(50),
-    last_name VARCHAR(50),
-    gender ENUM('Male', 'Female', 'Other'),
-    date_of_birth DATE,
-    phone VARCHAR(20),
-    emergency_contact VARCHAR(100),
-    registration_date DATETIME DEFAULT CURRENT_TIMESTAMP,
-    is_emergency BOOLEAN DEFAULT FALSE,
-    status ENUM('active', 'discharged', 'deceased') DEFAULT 'active',
-    FOREIGN KEY (created_by_staff_id) REFERENCES Staff(staff_id)
-);
-
--- 5. Wards Table
-CREATE TABLE Wards (
-    ward_id INT PRIMARY KEY AUTO_INCREMENT,
-    name VARCHAR(50) NOT NULL,
-    type ENUM('general', 'icu', 'maternity', 'pediatric', 'other') NOT NULL,
-    in_charge_id INT,
-    FOREIGN KEY (in_charge_id) REFERENCES Staff(staff_id)
-);
-
--- 6. Beds Table
-CREATE TABLE Beds (
-    bed_id INT PRIMARY KEY AUTO_INCREMENT,
-    ward_id INT NOT NULL,
-    status ENUM('available', 'booked', 'maintenance') DEFAULT 'available',
-    FOREIGN KEY (ward_id) REFERENCES Wards(ward_id)
-);
-
--- 7. Services Table
-CREATE TABLE Services (
-    service_id INT PRIMARY KEY AUTO_INCREMENT,
-    ward_id INT NOT NULL,
-    name VARCHAR(100) NOT NULL,
-    type ENUM('bed', 'icu', 'ccu', 'pcu', 'other'),
-    cost DECIMAL(10,2),
-    FOREIGN KEY (ward_id) REFERENCES Wards(ward_id)
-);
-
--- 8. Admissions Table
-CREATE TABLE PatientAdmissions (
-    admission_id INT PRIMARY KEY AUTO_INCREMENT,
+-- 4. Appointments
+CREATE TABLE appointments (
+    id INT AUTO_INCREMENT PRIMARY KEY,
     patient_id INT NOT NULL,
+    doctor_id INT,
+    appointment_time DATETIME NOT NULL,
+    status ENUM('booked', 'completed', 'cancelled', 'no_show') NOT NULL DEFAULT 'booked',
+    notes TEXT DEFAULT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE,
+    FOREIGN KEY (doctor_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
+-- 5. Wards
+CREATE TABLE wards (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    type ENUM('ICU', 'General', 'Private', 'Semi-Private') NOT NULL,
+    manager_id INT DEFAULT NULL,
+    FOREIGN KEY (manager_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
+-- 6. Beds
+CREATE TABLE beds (
+    id INT AUTO_INCREMENT PRIMARY KEY,
     ward_id INT NOT NULL,
+    bed_number VARCHAR(20) NOT NULL,
+    status ENUM('available', 'occupied', 'cleaning') NOT NULL DEFAULT 'available',
+    patient_id INT DEFAULT NULL,
+    FOREIGN KEY (ward_id) REFERENCES wards(id) ON DELETE CASCADE,
+    FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE SET NULL,
+    UNIQUE KEY unique_bed_in_ward (ward_id, bed_number)
+);
+
+-- 7. Admissions
+CREATE TABLE admissions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    patient_id INT NOT NULL,
+    ward_id INT,
     bed_id INT,
-    admission_date DATETIME NOT NULL,
-    discharge_date DATETIME,
-    status ENUM('admitted', 'discharged') DEFAULT 'admitted',
-    FOREIGN KEY (patient_id) REFERENCES Patients(patient_id),
-    FOREIGN KEY (ward_id) REFERENCES Wards(ward_id),
-    FOREIGN KEY (bed_id) REFERENCES Beds(bed_id)
+    admit_time DATETIME NOT NULL,
+    discharge_time DATETIME DEFAULT NULL,
+    status ENUM('admitted', 'discharged', 'transferred') NOT NULL DEFAULT 'admitted',
+    admitted_by INT,
+    discharged_by INT,
+    FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE,
+    FOREIGN KEY (ward_id) REFERENCES wards(id) ON DELETE SET NULL,
+    FOREIGN KEY (bed_id) REFERENCES beds(id) ON DELETE SET NULL,
+    FOREIGN KEY (admitted_by) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (discharged_by) REFERENCES users(id) ON DELETE SET NULL
 );
 
--- 9. Doctor Availability Table
-CREATE TABLE DoctorAvailability (
-    availability_id INT PRIMARY KEY AUTO_INCREMENT,
-    doctor_id INT NOT NULL,
-    available_day ENUM('Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'),
-    available_time_from TIME,
-    available_time_to TIME,
-    FOREIGN KEY (doctor_id) REFERENCES Staff(staff_id)
+-- 8. Ambulances
+CREATE TABLE ambulances (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    number VARCHAR(50) NOT NULL UNIQUE,
+    status ENUM('available', 'busy', 'maintenance') NOT NULL DEFAULT 'available',
+    driver VARCHAR(100) DEFAULT NULL,
+    last_known_location VARCHAR(255) DEFAULT NULL
 );
 
--- 10. Medical Tests Table
-CREATE TABLE MedicalTests (
-    test_id INT PRIMARY KEY AUTO_INCREMENT,
-    name VARCHAR(100) NOT NULL,
-    type ENUM('blood', 'urine', 'xray', 'ultrasound', 'other'),
-    department_id INT,
-    price DECIMAL(10,2),
-    FOREIGN KEY (department_id) REFERENCES Departments(department_id)
-);
-
--- 11. Test Orders Table
-CREATE TABLE TestOrders (
-    order_id INT PRIMARY KEY AUTO_INCREMENT,
+-- 9. Ambulance Requests
+CREATE TABLE ambulance_requests (
+    id INT AUTO_INCREMENT PRIMARY KEY,
     patient_id INT NOT NULL,
-    test_id INT NOT NULL,
-    doctor_id INT NOT NULL,
-    order_date DATETIME DEFAULT CURRENT_TIMESTAMP,
-    status ENUM('ordered', 'completed', 'cancelled') DEFAULT 'ordered',
-    results TEXT,
-    FOREIGN KEY (patient_id) REFERENCES Patients(patient_id),
-    FOREIGN KEY (test_id) REFERENCES MedicalTests(test_id),
-    FOREIGN KEY (doctor_id) REFERENCES Staff(staff_id)
+    requested_by INT,
+    request_time DATETIME NOT NULL,
+    status ENUM('pending', 'approved', 'rejected', 'completed') NOT NULL DEFAULT 'pending',
+    pickup_location VARCHAR(255) NOT NULL,
+    dropoff_location VARCHAR(255) NOT NULL,
+    ambulance_id INT DEFAULT NULL,
+    FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE,
+    FOREIGN KEY (requested_by) REFERENCES users(id) ON DELETE SET NULL,
+    FOREIGN KEY (ambulance_id) REFERENCES ambulances(id) ON DELETE SET NULL
 );
 
--- 12. Medications Table
-CREATE TABLE Medications (
-    medication_id INT PRIMARY KEY AUTO_INCREMENT,
-    name VARCHAR(100) NOT NULL,
-    form ENUM('tablet', 'capsule', 'syrup', 'injection', 'other'),
-    strength VARCHAR(50)
-);
-
--- 13. Pharmacy Inventory Table
-CREATE TABLE PharmacyInventory (
-    inventory_id INT PRIMARY KEY AUTO_INCREMENT,
-    medication_id INT NOT NULL,
-    quantity INT DEFAULT 0,
-    FOREIGN KEY (medication_id) REFERENCES Medications(medication_id)
-);
-
--- 14. Prescriptions Table
-CREATE TABLE Prescriptions (
-    prescription_id INT PRIMARY KEY AUTO_INCREMENT,
+-- 10. Invoices
+CREATE TABLE invoices (
+    id INT AUTO_INCREMENT PRIMARY KEY,
     patient_id INT NOT NULL,
-    doctor_id INT NOT NULL,
-    medication_id INT NOT NULL,
-    dosage VARCHAR(100) NOT NULL,
-    prescribed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (patient_id) REFERENCES Patients(patient_id),
-    FOREIGN KEY (doctor_id) REFERENCES Staff(staff_id),
-    FOREIGN KEY (medication_id) REFERENCES Medications(medication_id)
+    created_by INT,
+    date DATE NOT NULL DEFAULT CURRENT_DATE,
+    total DECIMAL(10,2) NOT NULL,
+    paid BOOLEAN NOT NULL DEFAULT FALSE,
+    status ENUM('pending', 'paid', 'cancelled') NOT NULL DEFAULT 'pending',
+    details TEXT DEFAULT NULL,
+    FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
 );
 
--- 15. Ambulance Services Table
-CREATE TABLE AmbulanceServices (
-    ambulance_id INT PRIMARY KEY AUTO_INCREMENT,
-    vehicle_number VARCHAR(20) UNIQUE NOT NULL,
-    driver_name VARCHAR(100),
-    status ENUM('available', 'dispatched', 'maintenance') DEFAULT 'available'
+-- 11. Inventory
+CREATE TABLE inventory (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    ward_id INT NOT NULL,
+    item VARCHAR(255) NOT NULL,
+    quantity INT NOT NULL DEFAULT 0,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (ward_id) REFERENCES wards(id) ON DELETE CASCADE
 );
 
--- 16. Emergency Cases Table
-CREATE TABLE EmergencyCases (
-    case_id INT PRIMARY KEY AUTO_INCREMENT,
-    patient_id INT,
-    ambulance_id INT,
-    case_type ENUM('accident', 'heart_attack', 'stroke', 'trauma', 'other'),
-    severity ENUM('critical', 'serious', 'stable'),
-    pickup_location TEXT,
-    arrival_time DATETIME NOT NULL,
-    status ENUM('active', 'admitted', 'discharged') DEFAULT 'active',
-    FOREIGN KEY (patient_id) REFERENCES Patients(patient_id),
-    FOREIGN KEY (ambulance_id) REFERENCES AmbulanceServices(ambulance_id)
+-- 12. Notifications
+CREATE TABLE notifications (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    type VARCHAR(50) NOT NULL,
+    message TEXT NOT NULL,
+    read BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
--- 17. Invoices Table
-CREATE TABLE Invoices (
-    invoice_id INT PRIMARY KEY AUTO_INCREMENT,
-    patient_id INT NOT NULL,
-    admission_id INT,
-    total_amount DECIMAL(10,2) NOT NULL,
-    paid_amount DECIMAL(10,2) DEFAULT 0,
-    status ENUM('pending', 'paid') DEFAULT 'pending',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (patient_id) REFERENCES Patients(patient_id),
-    FOREIGN KEY (admission_id) REFERENCES PatientAdmissions(admission_id)
+-- 13. Audit Logs
+CREATE TABLE audit_logs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    performed_by INT NOT NULL,
+    action VARCHAR(100) NOT NULL,
+    target_table VARCHAR(50) DEFAULT NULL,
+    target_id INT DEFAULT NULL,
+    description TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (performed_by) REFERENCES users(id) ON DELETE RESTRICT
+    
 );
 
--- 18. Invoice Details Table
-CREATE TABLE InvoiceDetails (
-    detail_id INT PRIMARY KEY AUTO_INCREMENT,
-    invoice_id INT,
-    item_type ENUM('service', 'test', 'medication', 'ambulance'),
-    item_description VARCHAR(255),
-    cost DECIMAL(10,2),
-    FOREIGN KEY (invoice_id) REFERENCES Invoices(invoice_id)
-);
+-- Indexes
+CREATE INDEX idx_users_role ON users(role);
+CREATE INDEX idx_user_details_department ON user_details(department);
+CREATE INDEX idx_beds_status ON beds(status);
+CREATE INDEX idx_appointments_doctor_id ON appointments(doctor_id);
+CREATE INDEX idx_ambulance_requests_request_time ON ambulance_requests(request_time);
